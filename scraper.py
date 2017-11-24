@@ -8,10 +8,9 @@ import scraperwiki
 import urllib2
 from datetime import datetime
 from bs4 import BeautifulSoup
-import requests
-from dateutil.parser import parse
 
-#### FUNCTIONS 1.0
+#### FUNCTIONS 1.2
+import requests   # import requests for validating urls
 
 def validateFilename(filename):
     filenameregex = '^[a-zA-Z0-9]+_[a-zA-Z0-9]+_[a-zA-Z0-9]+_[0-9][0-9][0-9][0-9]_[0-9QY][0-9]$'
@@ -39,24 +38,26 @@ def validateFilename(filename):
 
 def validateURL(url):
     try:
-        r = urllib2.urlopen(url)
+        r = requests.get(url)
         count = 1
-        while r.getcode() == 500 and count < 4:
+        while r.status_code == 500 and count < 4:
             print ("Attempt {0} - Status code: {1}. Retrying.".format(count, r.status_code))
             count += 1
-            r = urllib2.urlopen(url)
+            r = requests.get(url)
         sourceFilename = r.headers.get('Content-Disposition')
 
         if sourceFilename:
             ext = os.path.splitext(sourceFilename)[1].replace('"', '').replace(';', '').replace(' ', '')
         else:
             ext = os.path.splitext(url)[1]
-        validURL = r.getcode() == 200
-        validFiletype = ext in ['.csv', '.xls', '.xlsx', '.docx']
+        validURL = r.status_code == 200
+        validFiletype = ext.lower() in ['.csv', '.xls', '.xlsx', '.pdf']
         return validURL, validFiletype
     except:
         print ("Error validating URL.")
         return False, False
+
+
 
 def validate(filename, file_url):
     validFilename = validateFilename(filename)
@@ -82,44 +83,29 @@ def convert_mth_strings ( mth_string ):
         mth_string = mth_string.replace(k, v)
     return mth_string
 
-
 #### VARIABLES 1.0
 
-entity_id = "E3201_TAWBO_gov"
-urls = ["http://www.telford.gov.uk/downloads/download/64/expenditure_over_100_-_2012","http://www.telford.gov.uk/downloads/download/14/expenditure_over_100_-_2013",
-       "http://www.telford.gov.uk/downloads/download/65/expenditure_over_100_-_2014", "http://www.telford.gov.uk/downloads/download/457/expenditure_over_100_-_2015",
-        "http://www.telford.gov.uk/downloads/download/1047/expenditure_over_100_-_2017"]
+entity_id = "LEC047_LAA_gov"
+url = "https://www.gov.uk/government/publications/legal-aid-agency-spend-over-25000-2017"
 errors = 0
 data = []
-url = 'http://example.com'
 
 #### READ HTML 1.0
-
 
 html = urllib2.urlopen(url)
 soup = BeautifulSoup(html, 'lxml')
 
 
 #### SCRAPE DATA
-for url in urls:
-    html = urllib2.urlopen(url)
-    soup = BeautifulSoup(html, 'lxml')
-    block = soup.find('ul', 'item-list')
-    links = block.find_all('a')
-    for link in links:
-        csvfile = link.text.strip().split('-')[-1].strip()
-        csvMth = csvfile[:3]
-        csvYr = csvfile[-4:]
-        csvMth = convert_mth_strings(csvMth.upper())
-        filename = entity_id + "_" + csvYr + "_" + csvMth
-        todays_date = str(datetime.now())
-        urls = link['href']
-        html_csv = urllib2.urlopen(urls)
-        soup_csv = BeautifulSoup(html_csv, 'lxml')
-        url = soup_csv.find('a', 'button button__primary')['href']
-        file_url = url
-        csvMth = convert_mth_strings(csvMth.upper())
-        data.append([csvYr, csvMth, url])
+
+links = soup.find_all('div', 'attachment-details')
+for link in links:
+    url = 'https://www.gov.uk'+link.find('span', 'download').find('a')['href']
+    title = link.find('h2', 'title').text.strip().split()
+    csvYr = title[1][:4]
+    csvMth = title[0][:3]
+    csvMth = convert_mth_strings(csvMth.upper())
+    data.append([csvYr, csvMth, url])
 
 
 #### STORE DATA 1.0
